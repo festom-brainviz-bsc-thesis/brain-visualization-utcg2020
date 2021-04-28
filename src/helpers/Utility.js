@@ -66,15 +66,13 @@ const hexToRgb = (hex) => {
   } : null;
 };
 
-const maxMoment = 47;
-
 const preprocessNpy = (matrix) => {
   const {shape, data} = matrix;
   return nj.array(Object.values(data)).reshape(shape);
 };
 
-const momentToMs = (moment) => {
-  return `${((moment/47) * 1500 - 500).toFixed(2)}ms`;
+const momentToMs = (moment, maxMoment) => {
+  return `${((moment/maxMoment) * 100).toFixed(2)}%`;
 };
 
-export {hiddenIndexes, hexToRgb, maxMoment, preprocessNpy, momentToMs};
+export {hiddenIndexes, hexToRgb, preprocessNpy, momentToMs};

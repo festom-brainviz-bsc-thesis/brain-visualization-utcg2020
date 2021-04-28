@@ -2,41 +2,19 @@ import React, {Component, createRef} from "react";
 import * as THREE from "three";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls";
 import {GLTFLoader} from "three/examples/jsm/loaders/GLTFLoader";
-import getNPY from "../helpers/getNPY";
 import {Grid, GridColumn, Sticky, Ref} from "semantic-ui-react";
-import mniCoords from "../helpers/mni_coordinates.npy";
-import dcnnLayerFile from "../helpers/dcnn_layer.npy";
-// import resAllFrqFile from "../helpers/neural_responses_all_frq.npy";
-import resAllLfpFile from "../helpers/neural_responses_all_lfp.npy";
-// import resCtgFrqFile from "../helpers/neural_responses_ctg_frq.npy";
-import resCtgLfpFile from "../helpers/neural_responses_ctg_lfp.npy";
-import predictiveFile from "../helpers/predictive.npy";
-import {hiddenIndexes, hexToRgb, preprocessNpy, maxMoment} from "../helpers/Utility";
+import {hiddenIndexes} from "../helpers/Utility";
 import {PageSidebar} from "./PageSidebar";
 import {PageHeader} from "./PageHeader";
+import {Group, Mesh} from "three";
+import UploadBox from "./UploadBox";
+
+const clamp = (val, from, to) => Math.min(Math.max(val, from), to);
 
 const sceneStyle = {
   height: 750, // we can control scene size by setting container dimensions
 };
 const totalTime = 10000; // 10s
-const msPerMoment = totalTime / maxMoment;
-
-const dcnnColors = [
-  "#25219E",
-  "#23479B",
-  "#2C5BA7",
-  "#00B7EC",
-  "#48C69B",
-  "#A7D316",
-  "#FFD100",
-  "#FF5F17",
-  "#E61A26",
-];
-
-const dcnnColorsRGB = dcnnColors.map((color) => {
-  const rgbObj = hexToRgb(color);
-  return [parseFloat(rgbObj.r)/255.0, parseFloat(rgbObj.g)/255.0, parseFloat(rgbObj.b)/255.0];
-});
 
 const sprite = new THREE.TextureLoader().load( "sprites/disc.png" );
 const vertexShader = `
@@ -44,7 +22,6 @@ const vertexShader = `
 
 attribute vec3 color;
 attribute float hidden;
-attribute int dcnn;
 attribute float nodeValue;
 attribute float nextNodeValue;
 
@@ -55,9 +32,6 @@ varying vec3 fragColor;
 varying float fragHidden;
 
 vec3 getColor(float nv) {
-  if (dcnn != -1) {
-    return color;
-  }
   if(nv <= 0.0) {
     return vec3(0.0, 0.0, abs(nv)); 
   } else { 
@@ -89,26 +63,27 @@ void main() {
 }
 `;
 
-const brainMaterial = new THREE.MeshLambertMaterial();
-
 class BrainScene extends Component {
   contextRef = createRef();
 
   state = {
-    brainData: [],
+    mniCoords: [],
   }
 
   async componentDidMount() {
     document.title = "Human Brain Activity";
     this.setState({
       displaySettings: {
-        subSelectImgChecked: false,
-        subSelectImage: "",
+        category: 0,
         onlyPredictiveProbes: false,
         colorCoded: false,
         highGammaFrq: false,
         moment: 0,
+        maxMoment: 0,
+        msPerMoment: 200,
       },
+      categoryLabels: [],
+      categoryCount: 0,
       playing: false,
       brainOpacity: 0.4,
       initialized: false,
@@ -140,15 +115,11 @@ class BrainScene extends Component {
     await this.addCustomSceneObjects();
     this.startAnimationLoop();
     window.addEventListener("resize", this.handleWindowResize);
-    await this.loadAllNPYs();
-    this.setupDots();
-    this.setState({initialized: true});
-    this.updateDots();
   }
 
   componentDidUpdate(prevProps, prevState, snapshot) {
     if (JSON.stringify(prevState.displaySettings) !== JSON.stringify(this.state.displaySettings)) {
-      this.updateDots();
+      this.updatePoints();
     }
   }
 
@@ -182,76 +153,78 @@ class BrainScene extends Component {
     this.el.appendChild(this.renderer.domElement); // mount using React ref
   };
 
-  async loadAllNPYs() {
-    const brainData = (await getNPY(mniCoords)).data;
-    const dcnnLayer = (await getNPY(dcnnLayerFile)).data;
-    const resAllFrq = [];// preprocessNpy(await getNPY(resAllFrqFile)).tolist();
-    const resAllLfp = preprocessNpy(await getNPY(resAllLfpFile)).tolist();
-    const resCtgFrq = [];// preprocessNpy(await getNPY(resCtgFrqFile)).tolist();
-    const resCtgLfp = preprocessNpy(await getNPY(resCtgLfpFile)).tolist();
-    const predictive = preprocessNpy(await getNPY(predictiveFile)).tolist();
-
-    this.setState({
-      brainData,
-      dcnnLayer,
-      resAllFrq,
-      resAllLfp,
-      resCtgFrq,
-      resCtgLfp,
-      predictive,
-    });
-  }
-
   // Here should come custom code.
   // Code below is taken from Three.js BoxGeometry example
   // https://threejs.org/docs/#api/en/geometries/BoxGeometry
   async addCustomSceneObjects() {
-    const getMeshFromGltf = (gltf) => {
-      {
-        const model = gltf.scene.children[0];
-
-        // temporary mesh for smoothing
-        const tempGeo = new THREE.Geometry().fromBufferGeometry(model.geometry);
-        tempGeo.mergeVertices();
-        tempGeo.computeVertexNormals();
-        tempGeo.computeFaceNormals();
-
-        model.geometry = tempGeo;
-        model.material = brainMaterial;
-
-        return new THREE.Mesh(model.geometry, model.material);
-      }
-    };
-
     const scene = this.scene;
 
     // load brain models
     const loader = new GLTFLoader();
     loader.setPath("/models/");
 
-    const lh = await this.loadModel(loader, scene, "lh_low.glb");
-    const meshLh = getMeshFromGltf(lh);
-    const rh = await this.loadModel(loader, scene, "rh_low.glb");
-    const meshRh = getMeshFromGltf(rh);
-    const combinedGeometry = new THREE.Geometry();
-    meshLh.updateMatrix();
-    combinedGeometry.merge(meshLh.geometry, meshLh.matrix, 0);
+    const brainScene = await this.loadModel(loader, scene, "brainsceneAltY.glb");
 
-    meshRh.updateMatrix();
-    combinedGeometry.merge(meshRh.geometry, meshRh.matrix, 1);
+    const children = brainScene.scene.children.filter((c) => c instanceof Mesh);
+    const brainGroup = new Group();
 
-    const combinedMaterial = meshRh.material;
-    combinedMaterial.opacity = this.state.brainOpacity;
-    combinedMaterial.transparent = true;
-    const combinedMesh = new THREE.Mesh(combinedGeometry, combinedMaterial);
-    combinedMesh.renderOrder = 1;
+    // dawnbringer 32 pallette from https://lospec.com/palette-list/dawnbringer-32
+    const pallette = [
+      0x000000,
+      0x222034,
+      0x45283c,
+      0x663931,
+      0x8f563b,
+      0xdf7126,
+      0xd9a066,
+      0xeec39a,
+      0xfbf236,
+      0x99e550,
+      0x6abe30,
+      0x37946e,
+      0x4b692f,
+      0x524b24,
+      0x323c39,
+      0x3f3f74,
+      0x306082,
+      0x5b6ee1,
+      0x639bff,
+      0x5fcde4,
+      0xcbdbfc,
+      0xffffff,
+      0x9badb7,
+      0x847e87,
+      0x696a6a,
+      0x595652,
+      0x76428a,
+      0xac3232,
+      0xd95763,
+      0xd77bba,
+      0x8f974a,
+      0x8a6f30,
+    ];
+    // sort brain parts by names
+    children.sort((a, b) => (a.name > b.name) ? 1 : -1);
+    // set children's material
+    children.forEach((child, idx) => {
+      // Assign same colours to both hemispheres
+      const color = pallette[idx % 32];
+      const material = new THREE.MeshLambertMaterial({color} );
+      material.opacity = this.state.brainOpacity;
+      material.transparent = true;
+      child.material = material;
+      brainGroup.add(child);
+    });
+    const brainGyriNames = children.map((c) => c.name);
+
+    brainGroup.renderOrder = 1;
     // positioning
-    combinedMesh.position.set(0, 15, 0);
-    combinedMesh.scale.set(1.2, 1.1, 1);
+    brainGroup.position.set(0, 15, 0);
+    brainGroup.scale.set(1.2, 1.1, 1);
+    brainGroup.rotation.set(Math.PI, Math.PI, 0);
 
-    scene.add(combinedMesh);
-    this.setState({mesh: combinedMesh});
-
+    scene.add(brainGroup);
+    this.setState({mesh: brainGroup, brainGyriNames});
     const lights = [];
     lights[0] = new THREE.PointLight(0xffffff, 1, 0);
     lights[1] = new THREE.PointLight(0xffffff, 1, 0);
@@ -279,11 +252,12 @@ class BrainScene extends Component {
     if (this.state.clock.running && !this.state.playing) {
       this.state.clock.stop();
     }
-    if (this.state.displaySettings.moment >= maxMoment && this.state.clock.running) {
+    if (this.state.displaySettings.moment >= this.state.displaySettings.maxMoment && this.state.clock.running) {
+      // this.state.clock.stop();
+      // this.setState({playing: false});
       this.hooks.togglePlayPause();
-      this.state.clock.stop();
     } else if (this.state.clock.running && this.state.playing) {
-      this.updateMoment(this.state.displaySettings.moment + 1000*delta/msPerMoment);
+      this.updateMoment(this.state.displaySettings.moment + 1000*delta/this.state.displaySettings.msPerMoment);
     }
     this.requestID = window.requestAnimationFrame(this.startAnimationLoop);
   };
@@ -300,21 +274,18 @@ class BrainScene extends Component {
     this.camera.updateProjectionMatrix();
   };
 
-  updateDots() {
+  updatePoints() {
     if (this.state.initialized) {
-      const mniData = this.state.brainData;
-      const pointCount = mniData.length / 3;
-      const color = this.state.dots.geometry.attributes.color;
+      const mniCoords = this.state.mniCoords;
+      const neuralData = this.state.neuralData;
+
+      const pointCount = mniCoords.length;
       const nodeValue = this.state.dots.geometry.attributes.nodeValue;
       const nextNodeValue = this.state.dots.geometry.attributes.nextNodeValue;
       const hidden = this.state.dots.geometry.attributes.hidden;
-      const dcnnAttribute = this.state.dots.geometry.attributes.dcnn;
 
       const {
-        colorCoded,
-        subSelectImage,
-        onlyPredictiveProbes,
-        subSelectImgChecked,
+        category,
         moment,
       } = this.state.displaySettings;
 
@@ -337,106 +308,62 @@ class BrainScene extends Component {
       timeToNextUniform.needsUpdate = true;
 
       nextMoment = curMoment + 1;
-      if (curMoment === maxMoment) {
+      if (curMoment === this.state.displaySettings.maxMoment) {
         nextMoment = curMoment;
       }
 
-      for (let i = 0; i < pointCount * 3; i += 3) {
-        const pointCoord = i / 3;
-
-        let value;
-        let nextValue;
-
-        // hidden check - only if we're colour coding and the electrode does not correspond to any dcnn level
-        // or if the index is supposed to be hidden
-        const dcnn = Number(this.state.dcnnLayer[pointCoord]);
+      for (let pointIndex = 0; pointIndex < pointCount; pointIndex += 1) {
         // filter out probes with hidden indexes
-        if (hiddenIndexes.includes(pointCoord)) {
-          continue;
-          // filter out non-colored probes if we're using dcnn colour codes
-        } else if (colorCoded === true && dcnn === -1) {
-          hidden.array[pointCoord] = 1;
-          continue;
-          // filter out non-predictive probes
-        } else if (onlyPredictiveProbes &&
-            subSelectImgChecked &&
-            subSelectImage !== "" &&
-            Number(this.state.predictive[pointCoord][subSelectImage]) === 0) {
-          hidden.array[pointCoord] = 1;
-          continue;
+        if (hiddenIndexes.includes(pointIndex)) {
+          hidden.array[pointIndex] = 1;
         } else {
-          hidden.array[pointCoord] = 0;
+          hidden.array[pointIndex] = 0;
         }
 
+        const value = neuralData[category][pointIndex][curMoment]/100;
+        const nextValue = neuralData[category][pointIndex][nextMoment]/100;
 
-        if (subSelectImgChecked && subSelectImage !== "" && (colorCoded === false || dcnn !== -1)) {
-          if (this.state.displaySettings.highGammaFrq) {
-            value = (this.state.resCtgFrq[subSelectImage][pointCoord][curMoment] + 3)/6;
-            nextValue = (this.state.resCtgFrq[subSelectImage][pointCoord][nextMoment] + 3)/6;
-          } else {
-            value = (this.state.resCtgLfp[subSelectImage][pointCoord][curMoment] + 100)/200;
-            nextValue = (this.state.resCtgLfp[subSelectImage][pointCoord][nextMoment] + 100)/200;
-          }
-        }
-        if (!subSelectImgChecked || subSelectImage === "") {
-          if (this.state.displaySettings.highGammaFrq) {
-            value = (this.state.resAllFrq[pointCoord][curMoment] + 3)/6;
-            nextValue = (this.state.resAllFrq[pointCoord][nextMoment] + 3)/6;
-          } else {
-            value = (this.state.resAllLfp[pointCoord][curMoment] + 100)/200;
-            nextValue = (this.state.resAllLfp[pointCoord][nextMoment] + 100)/200;
-          }
-        }
-
-        dcnnAttribute.array[pointCoord] = dcnn;
-        // handle colours
-        if (colorCoded === true && dcnn !== -1) {
-          color.array[i] = dcnnColorsRGB[dcnn][0];
-          color.array[i + 1] = dcnnColorsRGB[dcnn][1];
-          color.array[i + 2] = dcnnColorsRGB[dcnn][2];
-        } else {
-          dcnnAttribute.array[pointCoord] = -1;
-        }
-        nodeValue.array[pointCoord] = value * 2 - 1;
-        nextNodeValue.array[pointCoord] = nextValue * 2 - 1;
+        nodeValue.array[pointIndex] = value;
+        nextNodeValue.array[pointIndex] = nextValue;
       }
 
-      color.needsUpdate = true;
       hidden.needsUpdate = true;
       nodeValue.needsUpdate = true;
       nextNodeValue.needsUpdate = true;
-      dcnnAttribute.needsUpdate = true;
     }
   }
 
-  setupDots() {
-    if (this.scene && this.state.brainData) {
-      const mniData = this.state.brainData;
-      const pointCount = mniData.length / 3;
-      const geometry = new THREE.BufferGeometry();
+  initPoints() {
+    if (this.scene && this.state.mniCoords && this.state.neuralData) {
+      const pointCount = this.state.mniCoords.length;
+      const mniData = this.state.mniCoords;
 
+      const {
+        category,
+        moment,
+      } = this.state.displaySettings;
+
+      const geometry = new THREE.BufferGeometry();
       const position = new Float32Array(pointCount * 3);
       const nodeValue = new Float32Array(pointCount);
       const nextNodeValue = new Float32Array(pointCount);
       const hidden = new Array(pointCount);
-      const dcnn = new Int8Array(pointCount);
       const color = new Float32Array(pointCount * 3);
+      const dcnn = new Int8Array(pointCount); // remove soon
 
-      for (let i = 0; i < pointCount * 3; i += 3) {
-        const pointCoord = i / 3;
-        dcnn[pointCoord] = -1;
-        if (!hiddenIndexes.includes(pointCoord)) {
-          const [x, y, z] = [-mniData[i], mniData[i + 2], -mniData[i + 1]];
-          position[i] = x;
-          position[i + 1] = y;
-          position[i + 2] = z;
-          nodeValue[pointCoord] = this.state.resAllLfp[pointCoord][this.state.displaySettings.moment]/100;
-          nextNodeValue[pointCoord] = this.state.resAllLfp[pointCoord][this.state.displaySettings.moment + 1]/100;
-          hidden[pointCoord] = 0;
-        } else {
-          hidden[pointCoord] = 1;
-        }
+      for (let pointIndex = 0; pointIndex < pointCount; pointIndex += 1) {
+        // if (!hiddenIndexes.includes(pointIndex)) {
+
+        const [x, y, z] = [mniData[pointIndex][0], mniData[pointIndex][2], mniData[pointIndex][1]];
+        position[pointIndex*3] = x;
+        position[pointIndex*3 + 1] = y;
+        position[pointIndex*3 + 2] = z;
+        nodeValue[pointIndex] = this.state.neuralData[category][pointIndex][moment]/100;
+        nextNodeValue[pointIndex] = this.state.neuralData[category][pointIndex][moment + 1]/100;
+        hidden[pointIndex] = 0;
+        dcnn[pointIndex] = -1;
       }
+
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
       geometry.setAttribute("color", new THREE.Float32BufferAttribute(color, 3));
       geometry.setAttribute("hidden", new THREE.Float32BufferAttribute(hidden, 1));
@@ -444,53 +371,26 @@ class BrainScene extends Component {
       geometry.setAttribute("nextNodeValue", new THREE.Float32BufferAttribute(nextNodeValue, 1));
       geometry.setAttribute("dcnn", new THREE.Int32BufferAttribute(dcnn, 1));
 
-      const particles = new THREE.Points( geometry, this.state.material );
-      this.scene.add( particles );
-      this.setState({dots: particles});
+      const points = new THREE.Points( geometry, this.state.material );
+      this.scene.add( points );
+      this.setState({dots: points, initialized: true});
     }
   }
 
+
   hooks = {
-    subSelectImg: () => {
+    toggleCategory: (value) => {
       this.setState((prevState) =>
         ({displaySettings: {
           ...prevState.displaySettings,
-          subSelectImgChecked: !prevState.displaySettings.subSelectImgChecked,
-        }}));
-    },
-    togglePredictiveProbes: () => {
-      this.setState((prevState) =>
-        ({displaySettings: {
-          ...prevState.displaySettings,
-          onlyPredictiveProbes: !prevState.displaySettings.onlyPredictiveProbes,
-        }}));
-    },
-    toggleHighGammaFrq: () => {
-      this.setState((prevState) =>
-        ({displaySettings: {
-          ...prevState.displaySettings,
-          highGammaFrq: !prevState.displaySettings.highGammaFrq,
-        }}));
-    },
-    toggleSubSelectImg: (value) => {
-      this.setState((prevState) =>
-        ({displaySettings: {
-          ...prevState.displaySettings,
-          subSelectImage: prevState.displaySettings.subSelectImage === value ? "" : value,
-        }}));
-    },
-    toggleColorCode: () => {
-      this.setState((prevState) =>
-        ({displaySettings: {
-          ...prevState.displaySettings,
-          colorCoded: !prevState.displaySettings.colorCoded,
+          category: value,
         }}));
     },
     timeForward: () => {
-      if (this.state.displaySettings.moment !== maxMoment) {
+      if (this.state.displaySettings.moment !== this.state.displaySettings.maxMoment) {
         this.updateMoment(this.state.displaySettings.moment + 1);
       }
-      if (this.state.displaySettings.moment === maxMoment) {
+      if (this.state.displaySettings.moment === this.state.displaySettings.maxMoment) {
         this.setState({playing: false});
       }
     },
@@ -502,8 +402,11 @@ class BrainScene extends Component {
     updateBrainOpacity: (brainOpacity) => {
       this.setState({brainOpacity});
       if (this.state.mesh) {
-        const material = this.state.mesh.material;
-        material.opacity = brainOpacity;
+        this.state.mesh.children.forEach((child) => {
+          if (child.material) {
+            child.material.opacity = brainOpacity;
+          }
+        });
       }
     },
     togglePlayPause: () => {
@@ -518,12 +421,53 @@ class BrainScene extends Component {
       this.setState({playing: false});
       this.updateMoment(0);
     },
+    selectGyri: (_, e) => {
+      const gyri = e.value;
+      if (this.state.mesh) {
+        this.state.mesh.children.forEach((child) => {
+          if (gyri.length === 0 || gyri.includes(child.name)) {
+            child.visible = true;
+          } else {
+            child.visible = false;
+          }
+        });
+      }
+    },
   }
 
   updateMoment = (moment) => {
-    this.setState({displaySettings: {...this.state.displaySettings, moment}});
+    const newMoment = clamp(moment, 0, this.state.displaySettings.maxMoment);
+    this.setState({displaySettings: {...this.state.displaySettings, moment: newMoment}});
   }
 
+  onNpyFileRead = (target, data) => {
+    switch (target) {
+      case "neuralData":
+        this.setState({
+          "neuralData": data,
+          "categoryCount": data.length,
+          "displaySettings": {
+            ...this.state.displaySettings,
+            maxMoment: data[0][0].length - 1,
+            msPerMoment: totalTime / (data[0][0].length - 1),
+          },
+        });
+        break;
+      case "MNIcoordinates":
+        this.setState({
+          "mniCoords": data,
+        });
+        break;
+      case "categoryLabels":
+        this.setState({
+          "categoryLabels": data,
+        });
+        break;
+      default:
+        return;
+    }
+    this.initPoints();
+  }
 
   render() {
     return <Ref innerRef={this.contextRef}>
@@ -532,6 +476,26 @@ class BrainScene extends Component {
           paddingLeft: "2rem",
           marginTop: "5rem",
         }}>
+          <UploadBox
+            target={"neuralData"}
+            label={"Upload neural data"}
+            description={"A 3D .npy matrix with dimensions corresponding to CATEGORIES x PROBES x TIME. CATEGORIES " +
+            "must at least be of length 1."}
+            onNpyFileRead={this.onNpyFileRead}
+          />
+          <UploadBox
+            target={"MNIcoordinates"}
+            label={"Upload MNI coordinates"}
+            description={"A 2D .npy matrix with dimensions corresponding to PROBES x 3 for each spatial dimension. " +
+            "Y is the vertical dimension and the ordering of dimensions should be [x, z, y]."}
+            onNpyFileRead={this.onNpyFileRead}
+          />
+          <UploadBox
+            target={"categoryLabels"}
+            label={"Upload stimulus image category labels (optional)"}
+            description={"A .npy vector of strings or ints of length CATEGORIES."}
+            onNpyFileRead={this.onNpyFileRead}
+          />
           <PageSidebar
             displaySettings={this.state.displaySettings}
             playing={this.state.playing}
@@ -539,6 +503,9 @@ class BrainScene extends Component {
             updateMoment={this.updateMoment}
             slider={this.slider}
             brainOpacity={this.state.brainOpacity}
+            brainGyriNames={this.state.brainGyriNames}
+            categoryLabels={this.state.categoryLabels}
+            categoryCount={this.state.categoryCount}
           />
         </GridColumn>
         <GridColumn width={12}>
