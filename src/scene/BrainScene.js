@@ -82,6 +82,7 @@ class BrainScene extends Component {
         maxMoment: 0,
         msPerMoment: 200,
       },
+      dots: undefined,
       categoryLabels: [],
       categoryCount: 0,
       playing: false,
@@ -276,6 +277,7 @@ class BrainScene extends Component {
 
   updatePoints() {
     if (this.state.initialized) {
+      console.log("updating points");
       const mniCoords = this.state.mniCoords;
       const neuralData = this.state.neuralData;
 
@@ -320,8 +322,8 @@ class BrainScene extends Component {
           hidden.array[pointIndex] = 0;
         }
 
-        const value = neuralData[category][pointIndex][curMoment]/100;
-        const nextValue = neuralData[category][pointIndex][nextMoment]/100;
+        const value = neuralData[category][pointIndex][curMoment];
+        const nextValue = neuralData[category][pointIndex][nextMoment];
 
         nodeValue.array[pointIndex] = value;
         nextNodeValue.array[pointIndex] = nextValue;
@@ -334,7 +336,13 @@ class BrainScene extends Component {
   }
 
   initPoints() {
-    if (this.scene && this.state.mniCoords && this.state.neuralData) {
+    if (this.scene && this.state.mniCoords.length !== 0 && this.state.neuralData.length !== 0) {
+      if (this.state.dots !== undefined) {
+        this.state.dots.geometry.dispose();
+        this.state.dots.material.dispose();
+        this.scene.remove( this.state.dots );
+      }
+
       const pointCount = this.state.mniCoords.length;
       const mniData = this.state.mniCoords;
 
@@ -354,7 +362,7 @@ class BrainScene extends Component {
       for (let pointIndex = 0; pointIndex < pointCount; pointIndex += 1) {
         // if (!hiddenIndexes.includes(pointIndex)) {
 
-        const [x, y, z] = [mniData[pointIndex][0], mniData[pointIndex][2], mniData[pointIndex][1]];
+        const [x, y, z] = [mniData[pointIndex][0], mniData[pointIndex][1], mniData[pointIndex][2]];
         position[pointIndex*3] = x;
         position[pointIndex*3 + 1] = y;
         position[pointIndex*3 + 2] = z;
@@ -471,31 +479,19 @@ class BrainScene extends Component {
 
   render() {
     return <Ref innerRef={this.contextRef}>
-      <Grid columns={2}>
+      <Grid centered columns={2}>
+        <GridColumn width={24}>
+          <PageHeader/>
+        </GridColumn>
+        <GridColumn width={12}>
+          <Sticky context={this.contextRef}>
+            <div style={sceneStyle} ref={(ref) => (this.el = ref)}/>
+          </Sticky>
+        </GridColumn>
         <GridColumn width={4} style={{
           paddingLeft: "2rem",
           marginTop: "5rem",
         }}>
-          <UploadBox
-            target={"neuralData"}
-            label={"Upload neural data"}
-            description={"A 3D .npy matrix with dimensions corresponding to CATEGORIES x PROBES x TIME. CATEGORIES " +
-            "must at least be of length 1."}
-            onNpyFileRead={this.onNpyFileRead}
-          />
-          <UploadBox
-            target={"MNIcoordinates"}
-            label={"Upload MNI coordinates"}
-            description={"A 2D .npy matrix with dimensions corresponding to PROBES x 3 for each spatial dimension. " +
-            "Y is the vertical dimension and the ordering of dimensions should be [x, z, y]."}
-            onNpyFileRead={this.onNpyFileRead}
-          />
-          <UploadBox
-            target={"categoryLabels"}
-            label={"Upload stimulus image category labels (optional)"}
-            description={"A .npy vector of strings or ints of length CATEGORIES."}
-            onNpyFileRead={this.onNpyFileRead}
-          />
           <PageSidebar
             displaySettings={this.state.displaySettings}
             playing={this.state.playing}
@@ -506,13 +502,28 @@ class BrainScene extends Component {
             brainGyriNames={this.state.brainGyriNames}
             categoryLabels={this.state.categoryLabels}
             categoryCount={this.state.categoryCount}
-          />
-        </GridColumn>
-        <GridColumn width={12}>
-          <Sticky context={this.contextRef}>
-            <PageHeader/>
-            <div style={sceneStyle} ref={(ref) => (this.el = ref)}/>
-          </Sticky>
+          >
+            <UploadBox
+              target={"neuralData"}
+              label={"Upload neural data"}
+              description={"A 3D .npy matrix with dimensions corresponding to CATEGORIES x PROBES x TIME. CATEGORIES " +
+              "must at least be of length 1."}
+              onNpyFileRead={this.onNpyFileRead}
+            />
+            <UploadBox
+              target={"MNIcoordinates"}
+              label={"Upload MNI coordinates"}
+              description={"A 2D .npy matrix with dimensions corresponding to PROBES x 3 for each spatial dimension. " +
+              "Y is the vertical dimension and the ordering of dimensions should be [x, y, z]."}
+              onNpyFileRead={this.onNpyFileRead}
+            />
+            <UploadBox
+              target={"categoryLabels"}
+              label={"Upload stimulus image category labels (optional)"}
+              description={"A .npy vector of strings or ints of length CATEGORIES."}
+              onNpyFileRead={this.onNpyFileRead}
+            />
+          </PageSidebar>
         </GridColumn>
       </Grid>
     </Ref>;

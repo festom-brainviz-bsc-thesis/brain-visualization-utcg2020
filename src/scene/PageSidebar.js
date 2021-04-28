@@ -3,9 +3,15 @@ import {Button, Grid, GridColumn, Header, Segment, Select} from "semantic-ui-rea
 import {momentToMs} from "../helpers/Utility";
 import {Slider} from "react-semantic-ui-range";
 
+const sidebarDescription = "This tool allows you to upload human brain recording data in a generic format along with " +
+    "anatomical (MNI) locations of the electrodes. Once uploaded you will be able to interact with your data. We hope" +
+    " this visual tool is helpful for understanding the data you have and maybe make some discoveries! Please follow " +
+    "the data format specified below.";
+/*
 const sidebarDescription = "This visualization allows to you to interactively explore human brain data recorded with " +
     "deep intracranial probes (electrodes, implanted inside test subjects' brains as shown on the x-ray image below)" +
     ".\n";
+ */
 const sidebarProgressTimeDescription = "As you progress through time (using the \"Time\" slider) you will see how " +
     "how the activity changes.\n";
 const sidebarCategoryDescription = "You can choose the stimulus category the neural reaction to which " +
@@ -64,7 +70,7 @@ export const PageSidebar = (props) => {
   if (displaySettings && hooks) {
     return <Fragment>
       <p style={{"textAlign": "left"}}>{sidebarDescription}</p>
-      <img src={"xray.png"} width={"100%"} alt={"X-ray image of electrodes within a brain"}/>
+      {props.children}
       <p style={{"textAlign": "left"}}>{sidebarProgressTimeDescription}</p>
       {categoryCount !== 0 && <p style={{"textAlign": "left"}}>{sidebarCategoryDescription}</p> }
       {categoryCount !== 0 && <Segment vertical>
