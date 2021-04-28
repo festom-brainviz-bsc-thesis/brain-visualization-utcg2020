@@ -210,10 +210,11 @@ class BrainScene extends Component {
     children.forEach((child, idx) => {
       // Assign same colours to both hemispheres
       const color = pallette[idx % 32];
-      const material = new THREE.MeshLambertMaterial({color} );
-      material.opacity = this.state.brainOpacity;
-      material.transparent = true;
-      child.material = material;
+      const brainMaterial = new THREE.MeshLambertMaterial({color} );
+      brainMaterial.opacity = this.state.brainOpacity;
+      brainMaterial.transparent = true;
+      brainMaterial.side = THREE.DoubleSide;
+      child.material = brainMaterial;
       brainGroup.add(child);
     });
     const brainGyriNames = children.map((c) => c.name);

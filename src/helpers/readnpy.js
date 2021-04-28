@@ -1,6 +1,7 @@
 const {Float16Array} = require("@petamoriken/float16");
 export default (function() {
-  // repurposed https://gist.github.com/nvictus/88b3b5bfe587d32ac1ab519fd0009607
+  // Adapted from "NumPy binary file parser for javascript" by Nezar Abdennur (nvictus)
+  // https://gist.github.com/nvictus/88b3b5bfe587d32ac1ab519fd0009607
   function asciiDecode(buf) {
     return String.fromCharCode.apply(null, new Uint8Array(buf));
   }

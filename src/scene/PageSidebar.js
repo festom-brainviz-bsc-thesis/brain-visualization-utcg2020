@@ -1,6 +1,5 @@
 import React, {Fragment} from "react";
 import {Button, Grid, GridColumn, Header, Segment, Select} from "semantic-ui-react";
-import {momentToMs} from "../helpers/Utility";
 import {Slider} from "react-semantic-ui-range";
 
 const sidebarDescription = "This tool allows you to upload human brain recording data in a generic format along with " +
@@ -81,7 +80,7 @@ export const PageSidebar = (props) => {
           categoryCount={categoryCount}/>
       </Segment>}
       <Segment vertical>
-        <Header>Time: {momentToMs(displaySettings.moment, displaySettings.maxMoment)}</Header>
+        <Header>{`t=${displaySettings.moment}`}</Header>
         <Slider
           /* eslint-disable no-unused-vars */
           ref={(r) => slider = r}

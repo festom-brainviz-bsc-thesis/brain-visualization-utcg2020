@@ -71,8 +71,4 @@ const preprocessNpy = (matrix) => {
   return nj.array(Object.values(data)).reshape(shape);
 };
 
-const momentToMs = (moment, maxMoment) => {
-  return `${((moment/maxMoment) * 100).toFixed(2)}%`;
-};
-
-export {hiddenIndexes, hexToRgb, preprocessNpy, momentToMs};
+export {hiddenIndexes, hexToRgb, preprocessNpy};
