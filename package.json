@@ -1,7 +1,8 @@
 {
-  "name": "brain-viz",
-  "version": "0.1.1",
+  "name": "brainviz-thesis-app",
+  "version": "0.1.2",
   "private": true,
+  "homepage": ".",
   "resolutions": {
     "sharp": "0.22.1"
   },
