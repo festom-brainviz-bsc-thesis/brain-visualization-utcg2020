@@ -480,10 +480,8 @@ class BrainScene extends Component {
 
   render() {
     return <Ref innerRef={this.contextRef}>
-      <Grid centered columns={2}>
-        <GridColumn width={24}>
-          <PageHeader/>
-        </GridColumn>
+      <Grid centered columns={3}>
+        <PageHeader/>
         <GridColumn width={12}>
           <Sticky context={this.contextRef}>
             <div style={sceneStyle} ref={(ref) => (this.el = ref)}/>
