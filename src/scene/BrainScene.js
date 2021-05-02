@@ -62,7 +62,7 @@ vec3 getColor(float nv) {
 
 void main() {
   fragColor = mix(getColor(clamp(nodeValue, -1.0, 1.0)), getColor(clamp(nextNodeValue, -1.0, 1.0)), timeToNext);
-  fragHidden = hidden;
+  fragHidden = hidden + float(abs(nodeValue) < 0.1);
 
   gl_PointSize = maxPointSize * pow(abs(mix(nodeValue, nextNodeValue, timeToNext)), 1.5);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -88,60 +88,60 @@ class BrainScene extends Component {
   contextRef = createRef();
 
   state = {
+    displaySettings: {
+      category: 0,
+      onlyPredictiveProbes: false,
+      colorCoded: false,
+      highGammaFrq: false,
+      moment: 0,
+      maxMoment: 0,
+      msPerMoment: 200,
+    },
+    neuralData: [],
     mniCoords: [],
+    topCameraCentre: 0,
+    topCameraSpread: initialCameraSpread,
+    topPlaneTimeout: null,
+    sideCameraCentre: 0,
+    sideCameraSpread: initialCameraSpread,
+    sidePlaneTimeout: null,
+    frontCameraCentre: 0,
+    frontCameraSpread: initialCameraSpread,
+    frontPlaneTimeout: null,
+    orthoCameraDistance: 120,
+    material: new THREE.ShaderMaterial({
+      uniforms: {
+        tex: {
+          type: "t",
+          value: sprite,
+        },
+        maxPointSize: {
+          type: "f",
+          value: 25.0,
+        },
+        timeToNext: {
+          type: "f",
+          value: 0.0,
+        },
+      },
+      vertexShader: vertexShader,
+      fragmentShader: fragmentShader,
+      transparent: true,
+      blending: THREE.NormalBlending,
+      sizeAttenuation: true,
+      // depthWrite: false,
+    }),
+    dots: undefined,
+    categoryLabels: [],
+    categoryCount: 0,
+    playing: false,
+    brainOpacity: 0.4,
+    initialized: false,
+    clock: new THREE.Clock(),
   }
 
   async componentDidMount() {
     document.title = "Human Brain Activity";
-    this.setState({
-      displaySettings: {
-        category: 0,
-        onlyPredictiveProbes: false,
-        colorCoded: false,
-        highGammaFrq: false,
-        moment: 0,
-        maxMoment: 0,
-        msPerMoment: 200,
-      },
-      dots: undefined,
-      categoryLabels: [],
-      categoryCount: 0,
-      playing: false,
-      brainOpacity: 0.4,
-      initialized: false,
-      clock: new THREE.Clock(),
-      material: new THREE.ShaderMaterial({
-        uniforms: {
-          tex: {
-            type: "t",
-            value: sprite,
-          },
-          maxPointSize: {
-            type: "f",
-            value: 25.0,
-          },
-          timeToNext: {
-            type: "f",
-            value: 0.0,
-          },
-        },
-        vertexShader: vertexShader,
-        fragmentShader: fragmentShader,
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-        sizeAttenuation: true,
-      }),
-      topCameraCentre: 0,
-      topCameraSpread: initialCameraSpread,
-      topPlaneTimeout: null,
-      sideCameraCentre: 0,
-      sideCameraSpread: initialCameraSpread,
-      sidePlaneTimeout: null,
-      frontCameraCentre: 0,
-      frontCameraSpread: initialCameraSpread,
-      frontPlaneTimeout: null,
-      orthoCameraDistance: 120,
-    });
     this.loadModel = this.loadModel.bind(this);
     this.sceneSetup();
     await this.addCustomSceneObjects();
@@ -364,6 +364,9 @@ class BrainScene extends Component {
         .filter((p) => p.visible === true);
 
     visiblePlanes.forEach((p) => p.visible = false);
+    // decrease dot size
+    const maxPointSize = this.state.material.uniforms.maxPointSize;
+    maxPointSize.value = 10.0;
 
     // top
     this.renderer.setViewport(left, bottom, topoWidth, topoHeight);
@@ -390,6 +393,7 @@ class BrainScene extends Component {
     this.renderer.render(this.scene, this.cameraSide);
 
     visiblePlanes.forEach((p) => p.visible = true);
+    maxPointSize.value = 25.0;
 
     // The window.requestAnimationFrame() method tells the browser that you wish to perform
     // an animation and requests that the browser call a specified function
@@ -702,48 +706,6 @@ class BrainScene extends Component {
     return <Ref innerRef={this.contextRef}>
       <Grid centered columns={3}>
         <PageHeader/>
-        <GridColumn width={12}>
-          <Sticky context={this.contextRef}>
-            <div style={sceneStyle} ref={(ref) => (this.el = ref)}/>
-          </Sticky>
-        </GridColumn>
-        <GridColumn width={4} style={{
-          paddingLeft: "2rem",
-          marginTop: "5rem",
-        }}>
-          <PageSidebar
-            displaySettings={this.state.displaySettings}
-            playing={this.state.playing}
-            hooks={this.hooks}
-            updateMoment={this.updateMoment}
-            slider={this.slider}
-            brainOpacity={this.state.brainOpacity}
-            brainGyriNames={this.state.brainGyriNames}
-            categoryLabels={this.state.categoryLabels}
-            categoryCount={this.state.categoryCount}
-          >
-            <UploadBox
-              target={"neuralData"}
-              label={"Upload neural data"}
-              description={"A 3D .npy matrix with dimensions corresponding to CATEGORIES x PROBES x TIME. CATEGORIES " +
-              "must at least be of length 1."}
-              onNpyFileRead={this.onNpyFileRead}
-            />
-            <UploadBox
-              target={"MNIcoordinates"}
-              label={"Upload MNI coordinates"}
-              description={"A 2D .npy matrix with dimensions corresponding to PROBES x 3 for each spatial dimension. " +
-              "Y is the vertical dimension and the ordering of dimensions should be [x, y, z]."}
-              onNpyFileRead={this.onNpyFileRead}
-            />
-            <UploadBox
-              target={"categoryLabels"}
-              label={"Upload stimulus image category labels (optional)"}
-              description={"A .npy vector of strings or ints of length CATEGORIES."}
-              onNpyFileRead={this.onNpyFileRead}
-            />
-          </PageSidebar>
-        </GridColumn>
         <GridColumn width={4}>
           <Segment vertical>
             <Header>Top camera</Header>
@@ -793,6 +755,48 @@ class BrainScene extends Component {
           </Segment>
         </GridColumn>
         <GridColumn width={4}/>
+        <GridColumn width={12}>
+          <Sticky context={this.contextRef}>
+            <div style={sceneStyle} ref={(ref) => (this.el = ref)}/>
+          </Sticky>
+        </GridColumn>
+        <GridColumn width={4} style={{
+          paddingLeft: "2rem",
+          marginTop: "5rem",
+        }}>
+          <PageSidebar
+            displaySettings={this.state.displaySettings}
+            playing={this.state.playing}
+            hooks={this.hooks}
+            updateMoment={this.updateMoment}
+            slider={this.slider}
+            brainOpacity={this.state.brainOpacity}
+            brainGyriNames={this.state.brainGyriNames}
+            categoryLabels={this.state.categoryLabels}
+            categoryCount={this.state.categoryCount}
+          >
+            <UploadBox
+              target={"neuralData"}
+              label={"Upload neural data"}
+              description={"A 3D .npy matrix with dimensions corresponding to CATEGORIES x PROBES x TIME. CATEGORIES " +
+              "must at least be of length 1."}
+              onNpyFileRead={this.onNpyFileRead}
+            />
+            <UploadBox
+              target={"MNIcoordinates"}
+              label={"Upload MNI coordinates"}
+              description={"A 2D .npy matrix with dimensions corresponding to PROBES x 3 for each spatial dimension. " +
+              "Y is the vertical dimension and the ordering of dimensions should be [x, y, z]."}
+              onNpyFileRead={this.onNpyFileRead}
+            />
+            <UploadBox
+              target={"categoryLabels"}
+              label={"Upload stimulus image category labels (optional)"}
+              description={"A .npy vector of strings or ints of length CATEGORIES."}
+              onNpyFileRead={this.onNpyFileRead}
+            />
+          </PageSidebar>
+        </GridColumn>
       </Grid>
     </Ref>;
   }
