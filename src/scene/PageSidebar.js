@@ -80,7 +80,7 @@ export const PageSidebar = (props) => {
           categoryCount={categoryCount}/>
       </Segment>}
       <Segment vertical>
-        <Header>{`t=${displaySettings.moment}`}</Header>
+        <Header>{`t=${displaySettings.moment.toFixed(2)}`}</Header>
         <Slider
           /* eslint-disable no-unused-vars */
           ref={(r) => slider = r}

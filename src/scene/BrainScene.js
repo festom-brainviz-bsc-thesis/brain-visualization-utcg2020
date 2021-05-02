@@ -3,7 +3,6 @@ import * as THREE from "three";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls";
 import {GLTFLoader} from "three/examples/jsm/loaders/GLTFLoader";
 import {Grid, GridColumn, Sticky, Ref, Segment, Header} from "semantic-ui-react";
-import {hiddenIndexes} from "../helpers/Utility";
 import {PageSidebar} from "./PageSidebar";
 import {PageHeader} from "./PageHeader";
 import {Group, Mesh} from "three";
@@ -466,13 +465,6 @@ class BrainScene extends Component {
       }
 
       for (let pointIndex = 0; pointIndex < pointCount; pointIndex += 1) {
-        // filter out probes with hidden indexes
-        if (hiddenIndexes.includes(pointIndex)) {
-          hidden.array[pointIndex] = 1;
-        } else {
-          hidden.array[pointIndex] = 0;
-        }
-
         const value = neuralData[category][pointIndex][curMoment];
         const nextValue = neuralData[category][pointIndex][nextMoment];
 
