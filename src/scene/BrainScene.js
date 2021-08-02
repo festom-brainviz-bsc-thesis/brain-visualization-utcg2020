@@ -700,7 +700,7 @@ class BrainScene extends Component {
         <PageHeader/>
         <GridColumn width={4}>
           <Segment vertical>
-            <Header>Top camera</Header>
+            <Header>Horizontal plane</Header>
             <Slider
               value={this.state.topCameraCentre}
               color="red"
@@ -716,7 +716,7 @@ class BrainScene extends Component {
         </GridColumn>
         <GridColumn width={4}>
           <Segment vertical>
-            <Header>Front camera</Header>
+            <Header>Coronal plane</Header>
             <Slider
               value={this.state.frontCameraCentre}
               color="red"
@@ -732,7 +732,7 @@ class BrainScene extends Component {
         </GridColumn>
         <GridColumn width={4}>
           <Segment vertical>
-            <Header>Side camera</Header>
+            <Header>Sagittal plane</Header>
             <Slider
               value={this.state.sideCameraCentre}
               color="red"
