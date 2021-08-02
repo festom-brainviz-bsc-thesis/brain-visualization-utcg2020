@@ -418,7 +418,7 @@ class BrainScene extends Component {
     const height = this.el.clientHeight;
 
     this.renderer.setSize(width, height);
-    this.camera.aspect = width / height;
+    this.camera.aspect = width / (height*2/3);
 
     // Note that after making changes to most of camera properties you have to call
     // .updateProjectionMatrix for the changes to take effect.
