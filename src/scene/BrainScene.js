@@ -238,7 +238,6 @@ class BrainScene extends Component {
     // top camera
     this.cameraTop = createOrthographicCamera(orthographicCameraDirection.Y);
     const [topPlaneNear, topPlaneFar] = createPlanes(orthographicCameraDirection.Y);
-    // console.log(cameraTop);
     // side camera
     this.cameraSide = createOrthographicCamera(orthographicCameraDirection.X);
     const [sidePlaneNear, sidePlaneFar] = createPlanes(orthographicCameraDirection.X);
@@ -427,7 +426,6 @@ class BrainScene extends Component {
 
   updatePoints() {
     if (this.state.initialized) {
-      console.log("updating points");
       const mniCoords = this.state.mniCoords;
       const neuralData = this.state.neuralData;
 
@@ -500,11 +498,8 @@ class BrainScene extends Component {
       const nextNodeValue = new Float32Array(pointCount);
       const hidden = new Array(pointCount);
       const color = new Float32Array(pointCount * 3);
-      const dcnn = new Int8Array(pointCount); // remove soon
 
       for (let pointIndex = 0; pointIndex < pointCount; pointIndex += 1) {
-        // if (!hiddenIndexes.includes(pointIndex)) {
-
         const [x, y, z] = [mniData[pointIndex][0], mniData[pointIndex][1], mniData[pointIndex][2]];
         position[pointIndex*3] = x;
         position[pointIndex*3 + 1] = y;
@@ -512,7 +507,6 @@ class BrainScene extends Component {
         nodeValue[pointIndex] = this.state.neuralData[category][pointIndex][moment]/100;
         nextNodeValue[pointIndex] = this.state.neuralData[category][pointIndex][moment + 1]/100;
         hidden[pointIndex] = 0;
-        dcnn[pointIndex] = -1;
       }
 
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
@@ -520,7 +514,6 @@ class BrainScene extends Component {
       geometry.setAttribute("hidden", new THREE.Float32BufferAttribute(hidden, 1));
       geometry.setAttribute("nodeValue", new THREE.Float32BufferAttribute(nodeValue, 1));
       geometry.setAttribute("nextNodeValue", new THREE.Float32BufferAttribute(nextNodeValue, 1));
-      geometry.setAttribute("dcnn", new THREE.Int32BufferAttribute(dcnn, 1));
 
       const points = new THREE.Points( geometry, this.state.material );
       this.scene.add( points );
